@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { generatePresentation, expandPresentation, generateSlideVisual } from '../services/geminiService';
-import { PresentationSlide, KnowledgeDocument, Plugin } from '../types';
-import { Presentation, ChevronRight, ChevronLeft, MapPin, Layout, Loader2, Zap, BookOpen, Globe, Maximize2, Minimize2, Plus, Image as ImageIcon, Wand2 } from 'lucide-react';
+import { PresentationSlide, KnowledgeDocument, Plugin, SavedSlide } from '../types';
+import { Presentation, ChevronRight, ChevronLeft, MapPin, Layout, Loader2, Zap, BookOpen, Globe, Maximize2, Minimize2, Plus, Bookmark, Check } from 'lucide-react';
 import { Button, Input } from './ui/Primitives';
 
 interface Props {
@@ -10,20 +10,21 @@ interface Props {
   plugins: Plugin[];
 }
 
-const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
+const PresentationStudio: React.FC<Props> = ({ knowledgeBase = [], plugins = [] }) => {
   const [topic, setTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpandingDeck, setIsExpandingDeck] = useState(false);
   const [slides, setSlides] = useState<PresentationSlide[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isCanvasExpanded, setIsCanvasExpanded] = useState(false);
+  const [savedStatus, setSavedStatus] = useState<Record<number, boolean>>({});
   
   // Options
   const [location, setLocation] = useState('');
 
   // Plugin Checks
-  const isWebSearchInstalled = plugins.find(p => p.id === 'google-search')?.installed;
-  const isMapsInstalled = plugins.find(p => p.id === 'google-maps')?.installed;
+  const isWebSearchInstalled = plugins?.find(p => p.id === 'google-search')?.installed;
+  const isMapsInstalled = plugins?.find(p => p.id === 'google-maps')?.installed;
 
   // Handle Escape key for full screen
   useEffect(() => {
@@ -36,12 +37,36 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isCanvasExpanded]);
 
+  const handleSaveSlide = () => {
+    const slide = slides[currentSlide];
+    if (!slide || !slide.visual) return;
+
+    const savedSlidesRaw = localStorage.getItem('sarathix_saved_slides');
+    const savedSlides: SavedSlide[] = savedSlidesRaw ? JSON.parse(savedSlidesRaw) : [];
+    
+    const newSavedSlide: SavedSlide = {
+      ...slide,
+      id: Math.random().toString(36).substring(7),
+      topic: topic || "General Topic",
+      savedAt: Date.now()
+    };
+
+    localStorage.setItem('sarathix_saved_slides', JSON.stringify([newSavedSlide, ...savedSlides]));
+    setSavedStatus(prev => ({ ...prev, [currentSlide]: true }));
+    
+    // Reset status after a few seconds
+    setTimeout(() => {
+      setSavedStatus(prev => ({ ...prev, [currentSlide]: false }));
+    }, 2000);
+  };
+
   // Helper to auto-generate visuals for a batch of slides
   const processVisualsForSlides = async (slidesToProcess: PresentationSlide[], startIndex: number) => {
+    if (!Array.isArray(slidesToProcess)) return;
     slidesToProcess.forEach(async (slide, relativeIndex) => {
       const actualIndex = startIndex + relativeIndex;
       try {
-        const base64Image = await generateSlideVisual(slide.title, slide.bullets);
+        const base64Image = await generateSlideVisual(slide.title, slide.bullets || []);
         setSlides(prev => prev.map((s, idx) => 
           idx === actualIndex ? { ...s, visual: base64Image } : s
         ));
@@ -57,6 +82,7 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
     setIsLoading(true);
     setSlides([]);
     setCurrentSlide(0);
+    setSavedStatus({});
 
     try {
       const kbContext = knowledgeBase.map(d => `[${d.title}]: ${d.content}`);
@@ -69,13 +95,16 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
         activePluginIds
       );
       
-      setSlides(generatedSlides);
-      
-      // Auto-trigger visual generation for all new slides
-      processVisualsForSlides(generatedSlides, 0);
+      if (Array.isArray(generatedSlides)) {
+        setSlides(generatedSlides);
+        processVisualsForSlides(generatedSlides, 0);
+      } else {
+        throw new Error("Invalid presentation format received.");
+      }
 
     } catch (e) {
       console.error(e);
+      alert("Failed to generate presentation. Please try a different topic.");
     } finally {
       setIsLoading(false);
     }
@@ -96,12 +125,10 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
         activePluginIds
       );
       
-      if (newSlides.length > 0) {
+      if (Array.isArray(newSlides) && newSlides.length > 0) {
         const startIndex = slides.length;
         setSlides(prev => [...prev, ...newSlides]);
-        setCurrentSlide(startIndex); // Jump to first new slide
-        
-        // Auto-trigger visual generation for the expanded slides
+        setCurrentSlide(startIndex);
         processVisualsForSlides(newSlides, startIndex);
       }
     } catch (e) {
@@ -118,6 +145,8 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
   const prevSlide = () => {
     if (currentSlide > 0) setCurrentSlide(c => c - 1);
   };
+
+  const currentSlideData = slides[currentSlide];
 
   return (
     <div className="h-full flex flex-col space-y-4 md:space-y-6 p-4 md:p-6 animate-fadeIn overflow-y-auto lg:overflow-hidden">
@@ -168,8 +197,8 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
                 <BookOpen className="w-4 h-4 text-indigo-400" />
                 <span>Personal DB</span>
               </div>
-              <span className={`text-[10px] md:text-xs ${knowledgeBase.length > 0 ? 'text-emerald-400' : 'text-gray-600'}`}>
-                {knowledgeBase.length > 0 ? `${knowledgeBase.length} Docs` : 'Empty'}
+              <span className={`text-[10px] md:text-xs ${knowledgeBase?.length > 0 ? 'text-emerald-400' : 'text-gray-600'}`}>
+                {knowledgeBase?.length > 0 ? `${knowledgeBase.length} Docs` : 'Empty'}
               </span>
             </div>
 
@@ -195,7 +224,7 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
           </Button>
 
           {/* Slide List */}
-          {slides.length > 0 && (
+          {Array.isArray(slides) && slides.length > 0 && (
              <div className="flex-1 flex flex-col min-h-[200px] border-t border-gray-800 pt-4">
                 <h4 className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Slides</h4>
                 <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-2">
@@ -237,6 +266,17 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
         {/* Slide Display Area */}
         <div className={`bg-gray-950 rounded-xl border border-gray-800 flex flex-col shadow-2xl relative overflow-hidden transition-all duration-300 ${isCanvasExpanded ? 'lg:col-span-3 fixed inset-0 z-[100] rounded-none' : 'lg:col-span-2 aspect-video lg:aspect-auto'}`}>
           <div className="absolute top-4 right-4 z-50 flex gap-2">
+            {currentSlideData && currentSlideData.visual && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleSaveSlide}
+                className={`bg-black/20 hover:bg-black/50 text-white rounded-full backdrop-blur-sm transition-all ${savedStatus[currentSlide] ? 'text-emerald-400' : ''}`}
+                title="Save to Gallery"
+              >
+                {savedStatus[currentSlide] ? <Check className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
+              </Button>
+            )}
             <Button 
               variant="ghost" 
               size="icon" 
@@ -247,21 +287,21 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
             </Button>
           </div>
 
-          {slides.length > 0 ? (
+          {currentSlideData ? (
             <>
               <div className="flex-1 p-6 md:p-12 flex flex-col relative bg-gradient-to-br from-gray-900 to-gray-950 overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
 
                 <div className="mb-4 md:mb-8 mt-4 z-10">
                    <h1 className="text-xl md:text-4xl font-bold text-white mb-2 md:mb-4 leading-tight">
-                     {slides[currentSlide].title}
+                     {currentSlideData.title}
                    </h1>
                    <div className="h-1 w-12 md:w-16 bg-indigo-500 rounded-full" />
                 </div>
 
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12 items-center z-10 overflow-y-auto lg:overflow-visible">
                     <div className="space-y-3 md:space-y-6">
-                        {slides[currentSlide].bullets.map((bullet, i) => (
+                        {Array.isArray(currentSlideData.bullets) && currentSlideData.bullets.map((bullet, i) => (
                             <div key={i} className="flex gap-3 md:gap-4 animate-fadeIn">
                                 <div className="w-1 md:w-1.5 h-1 md:h-1.5 mt-2 md:mt-2.5 bg-indigo-400 rounded-full shrink-0" />
                                 <p className="text-sm md:text-xl text-gray-300 font-light leading-relaxed">{bullet}</p>
@@ -270,8 +310,8 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
                     </div>
 
                     <div className="h-48 md:h-full max-h-[300px] md:max-h-[400px] bg-white/5 rounded-2xl border-2 border-dashed border-gray-800 flex items-center justify-center relative overflow-hidden">
-                        {slides[currentSlide].visual ? (
-                            <img src={slides[currentSlide].visual} alt="Slide Visual" className="w-full h-full object-contain p-2 md:p-4" />
+                        {currentSlideData.visual ? (
+                            <img src={currentSlideData.visual} alt="Slide Visual" className="w-full h-full object-contain p-2 md:p-4" />
                         ) : (
                             <div className="text-center p-4">
                                 <Loader2 className="w-6 h-6 text-pink-500 animate-spin mx-auto mb-2" />
@@ -282,7 +322,7 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-800/50 flex justify-between items-end text-[10px] md:text-sm text-gray-600 z-10">
-                  <span className="truncate max-w-[150px]">{slides[currentSlide].footer || "SarathiX AI"}</span>
+                  <span className="truncate max-w-[150px]">{currentSlideData.footer || "SarathiX AI"}</span>
                   <span className="font-mono">{currentSlide + 1} / {slides.length}</span>
                 </div>
               </div>
@@ -290,7 +330,7 @@ const PresentationStudio: React.FC<Props> = ({ knowledgeBase, plugins }) => {
               {!isCanvasExpanded && (
                 <div className="bg-gray-900 border-t border-gray-800 p-3 h-24 overflow-y-auto custom-scrollbar">
                    <span className="text-[10px] font-bold text-indigo-400 uppercase mb-1 tracking-wider block">Notes</span>
-                   <p className="text-gray-400 text-xs leading-relaxed">{slides[currentSlide].speakerNotes}</p>
+                   <p className="text-gray-400 text-xs leading-relaxed">{currentSlideData.speakerNotes}</p>
                 </div>
               )}
 

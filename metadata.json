@@ -1,7 +1,9 @@
+
 {
   "name": "SarathiX AI Teacher",
   "description": "A next-generation AI studio featuring Intelligent Presentation generation, Gemini 3.0 powered RAG speech analysis, and Web-grounded content creation.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }

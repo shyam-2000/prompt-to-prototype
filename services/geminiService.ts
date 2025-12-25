@@ -31,10 +31,25 @@ const parseJSON = (text: string) => {
   }
 };
 
+const SLIDE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING, description: 'The title of the slide.' },
+    bullets: { 
+      type: Type.ARRAY, 
+      items: { type: Type.STRING },
+      description: 'A list of 3-5 key points for the slide.'
+    },
+    speakerNotes: { type: Type.STRING, description: 'Detailed notes for the presenter.' },
+    footer: { type: Type.STRING, description: 'Contextual footer text.' }
+  },
+  required: ['title', 'bullets', 'speakerNotes']
+};
+
 export const runDirectSearch = async (query: string) => {
   const ai = getClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: query,
     config: { tools: [{ googleSearch: {} }] },
   });
@@ -85,13 +100,44 @@ export const executePythonCode = async (code: string) => {
 export const generateNotebookGuide = async (docs: { title: string; content: string }[]): Promise<NotebookGuide> => {
   const ai = getClient();
   const context = docs.map(d => `SOURCE: ${d.title}\nCONTENT: ${d.content}`).join('\n---\n');
-  const prompt = `Based on these sources, generate a Notebook Guide. Include a 2-paragraph summary, 5 FAQs, 5 key terms, and a comprehensive study guide. Return ONLY JSON.
-  SCHEMA: { "summary": string, "faqs": [{ "question": string, "answer": string }], "keyTerms": [{ "term": string, "definition": string }], "studyGuide": string }`;
+  const prompt = `Based on these sources, generate a Notebook Guide. Include a 2-paragraph summary, 5 FAQs, 5 key terms, and a comprehensive study guide. Return ONLY JSON.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt + "\n\nCONTEXT:\n" + context,
-    config: { responseMimeType: "application/json" }
+    config: { 
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          faqs: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                answer: { type: Type.STRING }
+              },
+              required: ['question', 'answer']
+            }
+          },
+          keyTerms: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                term: { type: Type.STRING },
+                definition: { type: Type.STRING }
+              },
+              required: ['term', 'definition']
+            }
+          },
+          studyGuide: { type: Type.STRING }
+        },
+        required: ['summary', 'faqs', 'keyTerms', 'studyGuide']
+      }
+    }
   });
   return parseJSON(response.text || "{}");
 };
@@ -209,36 +255,42 @@ export const processSpeechIntelligence = async (transcript: string, knowledgeBas
   const activePlugins = plugins || [];
   const useGoogleSearch = activePlugins.includes('google-search');
   
-  const prompt = `Analyze the following transcript: "${transcript}".
+  const prompt = `Perform a Deep Research analysis on the following transcript: "${transcript}".
   
-  HYBRID RAG TASK:
-  1. Translate the transcript into English.
-  2. Synthesize a comprehensive summary using both the provided Knowledge Base context and (if available) live web data.
-  3. Determine if external web grounding was used.
+  TASKS:
+  1. Translate the transcript into high-quality scholarly English.
+  2. Synthesize a "Deep Research" hybrid summary. Use both the provided Knowledge Base context and real-time information from the web to verify facts and expand on concepts.
+  3. The summary should be authoritative, detailed, and structured for research purposes.
+  4. Determine if external web grounding was used.
 
   KNOWLEDGE BASE CONTEXT:
-  ${knowledgeBase.join('\n---\n')}
+  ${knowledgeBase.length > 0 ? knowledgeBase.join('\n---\n') : "No personal documents provided."}
 
-  Return ONLY a JSON object with this schema:
-  {
-    "translation": "English translation string",
-    "summary": "Synthesized hybrid summary markdown string",
-    "ragUsed": boolean
-  }`;
+  Return ONLY a JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: prompt,
     config: { 
       responseMimeType: "application/json",
-      tools: useGoogleSearch ? [{ googleSearch: {} }] : undefined
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          translation: { type: Type.STRING },
+          summary: { type: Type.STRING },
+          ragUsed: { type: Type.BOOLEAN }
+        },
+        required: ['translation', 'summary', 'ragUsed']
+      },
+      tools: useGoogleSearch ? [{ googleSearch: {} }] : undefined,
+      thinkingConfig: { thinkingBudget: 16000 }
     }
   });
 
   return parseJSON(response.text || "{}");
 };
 
-export const generatePresentation = async (topic: string, kb: string[], options: any, plugins: string[]): Promise<any> => {
+export const generatePresentation = async (topic: string, kb: string[], options: any, plugins: string[] = []): Promise<any> => {
   const ai = getClient();
   const context = kb.join('\n---\n');
   const response = await ai.models.generateContent({
@@ -248,33 +300,42 @@ export const generatePresentation = async (topic: string, kb: string[], options:
     ${context}`,
     config: { 
       responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: SLIDE_SCHEMA
+      },
       tools: plugins.includes('google-search') ? [{ googleSearch: {} }] : undefined
     }
   });
   return parseJSON(response.text || "[]");
 };
 
-export const expandPresentation = async (topic: string, slides: any[], kb: string[], plugins: string[]): Promise<any> => {
+export const expandPresentation = async (topic: string, slides: any[], kb: string[], plugins: string[] = []): Promise<any> => {
   const ai = getClient();
   const context = kb.join('\n---\n');
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Expand the following presentation deck about ${topic}. Current slides: ${JSON.stringify(slides)}. 
+    contents: `Expand the following presentation deck about ${topic}. Add 3 more unique slides. Current slides: ${JSON.stringify(slides)}. 
     Knowledge Base Context:
     ${context}`,
     config: { 
       responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: SLIDE_SCHEMA
+      },
       tools: plugins.includes('google-search') ? [{ googleSearch: {} }] : undefined
     }
   });
   return parseJSON(response.text || "[]");
 };
 
-export const generateSlideVisual = async (title: string, bullets: string[]): Promise<string> => {
+export const generateSlideVisual = async (title: string, bullets: string[] = []): Promise<string> => {
   const ai = getClient();
+  const highlights = Array.isArray(bullets) ? bullets.join(', ') : 'educational visualization';
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
-    contents: `Infographic for ${title}. Highlights: ${bullets.join(', ')}`,
+    contents: `Infographic for ${title}. Highlights: ${highlights}`,
   });
   if (response.candidates?.[0]?.content?.parts) {
     for (const part of response.candidates[0].content.parts) {

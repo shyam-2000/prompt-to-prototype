@@ -32,6 +32,12 @@ export interface GeneratedVideo {
   type: 'AI_GENERATED' | 'YOUTUBE';
 }
 
+export interface SavedSlide extends PresentationSlide {
+  id: string;
+  topic: string;
+  savedAt: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';

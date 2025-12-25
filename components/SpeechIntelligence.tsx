@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { transcribeAudio, processSpeechIntelligence } from '../services/geminiService';
 import { KnowledgeDocument, Plugin } from '../types';
-import { Mic, Square, BrainCircuit, Globe, Languages, FileText, Loader2, Database, CheckCircle2, Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
+import { Mic, Square, BrainCircuit, Globe, Languages, FileText, Loader2, Database, Sparkles, AlertCircle, ArrowRight, NotebookTabs } from 'lucide-react';
 
 interface Props {
   knowledgeBase: KnowledgeDocument[];
@@ -102,111 +102,123 @@ const SpeechIntelligence: React.FC<Props> = ({ knowledgeBase, plugins, onExportT
 
   const handleSyncToKnowledgeBase = () => {
     if (!summary) return;
-    const title = `Speech Summary - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const title = `Deep Research Summary - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     onExportToKB(title, summary);
   };
 
   return (
-    <div className="h-full flex flex-col space-y-4 md:space-y-6 p-4 md:p-6 animate-fadeIn overflow-y-auto lg:overflow-hidden">
+    <div className="h-full flex flex-col space-y-6 p-6 animate-fadeIn overflow-hidden">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
-            <BrainCircuit className="w-6 h-6 md:w-8 md:h-8 text-indigo-500" />
+          <h2 className="text-4xl font-black text-white flex items-center gap-3">
+            <BrainCircuit className="w-10 h-10 text-indigo-500" />
             Speech Intel
           </h2>
-          <p className="text-xs md:text-sm text-gray-400 mt-1">Dual-Source RAG Synthesis.</p>
+          <p className="text-sm text-gray-500 font-medium tracking-wide mt-1">Dual-Source RAG Synthesis.</p>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-500/30 p-3 md:p-4 rounded-xl flex items-center gap-3 text-red-400">
-          <AlertCircle size={18} />
-          <p className="text-xs font-medium">{error}</p>
+        <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-xl flex items-center gap-3 text-red-400">
+          <AlertCircle size={20} />
+          <p className="text-sm font-medium">{error}</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 flex-1 min-h-0">
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-6 flex flex-col space-y-4 shadow-xl overflow-hidden">
-          <div className="bg-gray-950 rounded-xl p-4 md:p-6 flex flex-col items-center justify-center border border-gray-800 min-h-[180px] md:min-h-[220px] relative">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+        {/* Left Column: Recording and Transcript */}
+        <div className="lg:col-span-4 flex flex-col space-y-6 min-h-0">
+          {/* Recording Box */}
+          <div className="bg-gray-900/40 rounded-3xl border border-gray-800 p-8 flex flex-col items-center justify-center relative overflow-hidden flex-1 group shadow-2xl">
             {processingStep === 'recording' ? (
               <div className="flex flex-col items-center">
-                <div className="relative">
+                <div className="relative mb-6">
                   <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping"></span>
-                  <button onClick={stopRecording} className="relative bg-red-600 text-white w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.4)]">
-                    <Square size={24} className="fill-current" />
+                  <button onClick={stopRecording} className="relative bg-red-600 text-white w-24 h-24 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(220,38,38,0.4)]">
+                    <Square size={32} className="fill-current" />
                   </button>
                 </div>
-                <p className="text-red-500 mt-4 text-[10px] font-bold tracking-widest animate-pulse">RECORDING...</p>
+                <p className="text-red-500 text-xs font-black tracking-[0.2em] animate-pulse">RECORDING...</p>
               </div>
             ) : (
                <div className="flex flex-col items-center">
                   <button 
                     onClick={startRecording}
                     disabled={processingStep === 'transcribing' || processingStep === 'analyzing'}
-                    className="bg-indigo-600 text-white w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 disabled:opacity-50"
+                    className={`bg-indigo-600 text-white w-24 h-24 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 disabled:opacity-50 hover:bg-indigo-500 hover:shadow-indigo-500/20
+                      ${(processingStep === 'transcribing' || processingStep === 'analyzing') ? 'animate-pulse' : ''}`}
                   >
-                    <Mic size={24} />
+                    <Mic size={32} />
                   </button>
-                  <p className="text-gray-500 mt-4 text-[10px] uppercase font-bold tracking-wider">Tap to Speak</p>
+                  <p className="text-gray-500 mt-6 text-xs uppercase font-black tracking-widest group-hover:text-gray-400 transition-colors">Tap to Speak</p>
                </div>
             )}
             
             {(processingStep === 'transcribing' || processingStep === 'analyzing') && (
-              <div className="absolute inset-0 bg-gray-950/90 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center space-y-3">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+              <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center space-y-4">
+                <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+                <span className="text-xs font-black text-indigo-400 uppercase tracking-[0.3em]">
                   {processingStep === 'transcribing' ? 'Transcribing...' : 'Analyzing...'}
                 </span>
               </div>
             )}
           </div>
 
-          <div className="flex-1 min-h-[120px] flex flex-col bg-gray-950 rounded-xl border border-gray-800 p-4 overflow-hidden">
-             <h4 className="text-[10px] font-bold text-gray-500 mb-2 flex items-center gap-2 uppercase tracking-widest">
-               <FileText size={14} /> Transcript
+          {/* Transcript Box */}
+          <div className="bg-gray-900/40 rounded-3xl border border-gray-800 p-8 flex flex-col h-[300px] shadow-2xl">
+             <h4 className="text-[10px] font-black text-gray-500 mb-4 flex items-center gap-2 uppercase tracking-[0.2em]">
+               <FileText size={16} className="text-gray-600" /> Transcript
              </h4>
-             <div className="flex-1 overflow-y-auto text-gray-300 text-xs md:text-sm italic custom-scrollbar">
+             <div className="flex-1 overflow-y-auto text-gray-400 text-sm italic font-light leading-relaxed custom-scrollbar">
                {transcript || <span className="text-gray-800">Transcript will appear here...</span>}
              </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-6 lg:col-span-2 flex flex-col space-y-4 md:space-y-6 shadow-xl overflow-hidden">
-          <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-950 p-4 rounded-2xl border border-gray-800">
-             <div className="flex-1 text-center sm:text-left">
-                <h4 className="text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-2">
-                   <Database size={18} className="text-indigo-400" /> NotebookLM
-                </h4>
-                <p className="text-[10px] text-gray-500 mt-1">Export summary to Knowledge Base.</p>
+        {/* Right Column: NotebookLM Style Results */}
+        <div className="lg:col-span-8 bg-gray-900/40 rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden">
+          {/* Header Bar */}
+          <div className="flex flex-row items-center justify-between p-8 border-b border-gray-800 bg-gray-900/20">
+             <div className="flex items-center gap-4">
+                <div className="p-3 bg-gray-950 border border-gray-800 rounded-2xl text-indigo-400">
+                   <Database size={24} />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-white tracking-tight">NotebookLM</h4>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-1">Export summary to Knowledge Base.</p>
+                </div>
              </div>
              <button 
                 onClick={handleSyncToKnowledgeBase}
                 disabled={!summary || processingStep !== 'complete'}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider disabled:opacity-30 transition-all"
+                className="flex items-center justify-center gap-3 px-8 py-3 rounded-xl bg-indigo-600/10 border border-indigo-600/50 hover:bg-indigo-600/20 text-indigo-400 font-black text-xs uppercase tracking-widest disabled:opacity-20 transition-all group"
              >
-                <Sparkles size={14} /> Export <ArrowRight size={14} />
+                <Sparkles size={14} className="group-hover:rotate-12 transition-transform" /> Export <ArrowRight size={14} />
              </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto md:overflow-hidden pr-1">
-            <div className="bg-gray-950 rounded-xl border border-gray-800 p-4 flex flex-col h-48 md:h-auto overflow-hidden">
-               <h3 className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase mb-3">
+          {/* Result Panels */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-800 flex-1 min-h-0">
+            {/* Translation Panel */}
+            <div className="bg-gray-950 p-8 flex flex-col overflow-hidden">
+               <h3 className="flex items-center gap-3 text-indigo-500 font-black text-[10px] uppercase tracking-[0.3em] mb-6">
                  <Globe size={14} /> English Translation
                </h3>
-               <div className="flex-1 overflow-y-auto text-gray-400 text-xs leading-relaxed custom-scrollbar">
-                 {translation || <span className="text-gray-800">...</span>}
+               <div className="flex-1 overflow-y-auto text-gray-500 text-sm leading-relaxed custom-scrollbar font-light whitespace-pre-wrap">
+                 {translation || <span className="text-gray-900 opacity-30">...</span>}
                </div>
             </div>
 
-            <div className="bg-gray-950 rounded-xl border border-gray-800 p-4 flex flex-col relative h-64 md:h-auto overflow-hidden">
+            {/* Summary Panel */}
+            <div className="bg-gray-950 p-8 flex flex-col relative overflow-hidden border-l border-gray-800">
                {ragUsed && (
-                 <div className="absolute top-0 right-0 bg-indigo-500/10 text-indigo-400 text-[8px] font-black px-2 py-1 rounded-bl-lg uppercase">Hybrid Active</div>
+                 <div className="absolute top-8 right-8 bg-emerald-500/10 text-emerald-400 text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20">Hybrid Active</div>
                )}
-               <h3 className="flex items-center gap-2 text-emerald-400 font-bold text-[10px] uppercase mb-3">
+               <h3 className="flex items-center gap-3 text-emerald-500 font-black text-[10px] uppercase tracking-[0.3em] mb-6">
                  <Languages size={14} /> Hybrid Summary
                </h3>
-               <div className="flex-1 overflow-y-auto text-gray-200 text-xs md:text-sm leading-relaxed custom-scrollbar prose prose-invert prose-xs">
-                 {summary || <span className="text-gray-800 italic">Generate a summary...</span>}
+               <div className="flex-1 overflow-y-auto text-gray-300 text-sm leading-relaxed custom-scrollbar prose prose-invert prose-sm max-w-none">
+                 {summary || <span className="text-gray-900 opacity-30 italic">Generate a summary...</span>}
                </div>
             </div>
           </div>
