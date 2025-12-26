@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { PresentationSlide, PresentationOptions, NotebookGuide } from "../types";
+import { PresentationSlide, PresentationOptions, NotebookGuide, QuizItem } from "../types";
 
 const getClient = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -142,6 +142,34 @@ export const generateNotebookGuide = async (docs: { title: string; content: stri
   return parseJSON(response.text || "{}");
 };
 
+export const generateQuiz = async (docs: { title: string; content: string }[]): Promise<QuizItem[]> => {
+  const ai = getClient();
+  const context = docs.map(d => `SOURCE: ${d.title}\nCONTENT: ${d.content}`).join('\n---\n');
+  const prompt = `Based on these sources, generate a 5-question multiple-choice quiz. Return ONLY JSON.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: prompt + "\n\nCONTEXT:\n" + context,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correctAnswerIndex: { type: Type.INTEGER },
+            explanation: { type: Type.STRING }
+          },
+          required: ['question', 'options', 'correctAnswerIndex', 'explanation']
+        }
+      }
+    }
+  });
+  return parseJSON(response.text || "[]");
+};
+
 export const chatWithNotebook = async (query: string, docs: { title: string; content: string }[], history: any[] = []): Promise<{ text: string; sources: string[] }> => {
   const ai = getClient();
   const context = docs.map(d => `SOURCE: ${d.title}\nCONTENT: ${d.content}`).join('\n---\n');
@@ -244,6 +272,20 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string): Pr
       parts: [
         { inlineData: { data: base64Audio, mimeType: mimeType } },
         { text: "Transcribe this educational recording." },
+      ],
+    },
+  });
+  return response.text || "";
+};
+
+export const extractTextFromDocument = async (base64Data: string, mimeType: string): Promise<string> => {
+  const ai = getClient();
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: {
+      parts: [
+        { inlineData: { data: base64Data, mimeType: mimeType } },
+        { text: "Extract all text from this document verbatim. Return ONLY the extracted text, no markdown formatting or commentary." },
       ],
     },
   });

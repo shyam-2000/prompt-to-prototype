@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { KnowledgeDocument, NotebookGuide, ChatMessage } from '../types';
-import { generateNotebookGuide, chatWithNotebook, generateAudioOverview } from '../services/geminiService';
+import { KnowledgeDocument, QuizItem, ChatMessage, NotebookGuide } from '../types';
+import { generateQuiz, chatWithNotebook, generateAudioOverview, generateNotebookGuide, extractTextFromDocument } from '../services/geminiService';
 import {
-  Database, Plus, Trash2, FileText, Loader2, Cpu, Globe, Server,
+  Database, Plus, Trash2, FileText, Loader2,
   BookOpen, MessageSquare, Headphones, Sparkles, Send, Info,
-  CheckCircle2, ChevronRight, Play, Pause, Download
+  CheckCircle2, Play, Pause, GraduationCap, XCircle, Upload
 } from 'lucide-react';
 
 interface Props {
@@ -17,11 +17,12 @@ interface Props {
 }
 
 const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocument, initialSource, onClearInitial }) => {
-  const [activeTab, setActiveTab] = useState<'sources' | 'chat' | 'guide'>('sources');
+  const [activeTab, setActiveTab] = useState<'sources' | 'chat' | 'quiz' | 'guide'>('sources');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const logFileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleSelection = (id: string) => {
     setSelectedDocIds(prev => {
@@ -34,6 +35,12 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
 
   const [guide, setGuide] = useState<NotebookGuide | null>(null);
   const [isGeneratingGuide, setIsGeneratingGuide] = useState(false);
+
+  const [quiz, setQuiz] = useState<QuizItem[] | null>(null);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<number[]>([]);
+  const [showResults, setShowResults] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [isChatting, setIsChatting] = useState(false);
@@ -56,17 +63,66 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
   const handleAdd = async () => {
     if (!title.trim() || !content.trim()) return;
     setIsVectorizing(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const newDoc: KnowledgeDocument = {
-      id: Math.random().toString(36).substring(7),
-      title,
-      content,
-      timestamp: Date.now(),
-    };
-    onAddDocument(newDoc);
-    setTitle('');
-    setContent('');
-    setIsVectorizing(false);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const newDoc: KnowledgeDocument = {
+        id: Math.random().toString(36).substring(7),
+        title,
+        content,
+        timestamp: Date.now(),
+      };
+      onAddDocument(newDoc);
+      setTitle('');
+      setContent('');
+      setActiveTab('sources'); // Ensure the user sees the new document
+    } catch (e) {
+      console.error("Failed to add document", e);
+    } finally {
+      setIsVectorizing(false);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setTitle(file.name.replace(/\.[^/.]+$/, "")); // Remove extension
+
+    if (file.name.endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result;
+        if (typeof text === 'string') {
+          setContent(text);
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      setContent(`[File uploaded: ${file.name}]\n(Note: Automatic text extraction for .pdf and .doc files is not available in this client-side version. Please copy and paste the reference content here if needed.)`);
+    }
+
+    if (logFileInputRef.current) logFileInputRef.current.value = ''; // Reset input
+  };
+
+  const handleGenerateQuiz = async () => {
+    if (documents.length === 0) return;
+    setIsGeneratingQuiz(true);
+    setQuiz(null);
+    setCurrentQuestion(0);
+    setUserAnswers([]);
+    setShowResults(false);
+    try {
+      const activeDocs = selectedDocIds.size > 0
+        ? documents.filter(d => selectedDocIds.has(d.id))
+        : documents;
+      const result = await generateQuiz(activeDocs);
+      setQuiz(result);
+      setActiveTab('quiz');
+    } catch (e) {
+      alert("Quiz generation failed.");
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
   };
 
   const handleGenerateGuide = async () => {
@@ -81,6 +137,21 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
     } finally {
       setIsGeneratingGuide(false);
     }
+  };
+
+  const handleAnswer = (optionIndex: number) => {
+    const newAnswers = [...userAnswers];
+    newAnswers[currentQuestion] = optionIndex;
+    setUserAnswers(newAnswers);
+  };
+
+  const calculateScore = () => {
+    if (!quiz) return 0;
+    let score = 0;
+    quiz.forEach((q, i) => {
+      if (userAnswers[i] === q.correctAnswerIndex) score++;
+    });
+    return score;
   };
 
   const handleChat = async () => {
@@ -173,6 +244,7 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
         <div className="flex flex-wrap gap-1 bg-gray-900/50 p-1 rounded-xl border border-gray-800">
           <TabButton active={activeTab === 'sources'} onClick={() => setActiveTab('sources')} icon={<FileText size={16} />} label="Sources" />
           <TabButton active={activeTab === 'chat'} onClick={() => setActiveTab('chat')} icon={<MessageSquare size={16} />} label="Chat" />
+          <TabButton active={activeTab === 'quiz'} onClick={() => setActiveTab('quiz')} icon={<GraduationCap size={16} />} label="Quiz" />
           <TabButton active={activeTab === 'guide'} onClick={() => setActiveTab('guide')} icon={<BookOpen size={16} />} label="Guide" />
         </div>
       </div>
@@ -180,9 +252,19 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-y-auto lg:overflow-hidden">
         <div className="lg:col-span-3 flex flex-col gap-4 md:gap-6 overflow-visible lg:overflow-y-auto custom-scrollbar">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 md:p-6 shadow-xl">
-            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Plus size={14} /> New Source
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2"><Plus size={14} /> New Source</span>
+              <button onClick={() => logFileInputRef.current?.click()} className="text-xs flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors">
+                <Upload size={12} /> Import
+              </button>
             </h3>
+            <input
+              type="file"
+              ref={logFileInputRef}
+              className="hidden"
+              accept=".txt,.md,.json,.csv,.js,.ts,.tsx,.py"
+              onChange={handleFileUpload}
+            />
             <div className="space-y-3">
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-xs md:text-sm text-white focus:ring-1 focus:ring-emerald-500 outline-none transition-all" />
               <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Content" className="w-full h-32 md:h-40 bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-xs md:text-sm text-white focus:ring-1 focus:ring-emerald-500 outline-none resize-none" />
@@ -221,9 +303,13 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
                   Sources ({documents.length})
                   {selectedDocIds.size > 0 && <span className="text-xs md:text-sm font-bold text-indigo-400 ml-3 uppercase tracking-wider bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20">{selectedDocIds.size} Chat Active</span>}
                 </h3>
-                <button onClick={handleGenerateGuide} disabled={isGeneratingGuide || documents.length === 0} className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-30">
+                <button onClick={handleGenerateQuiz} disabled={isGeneratingQuiz || documents.length === 0} className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-30">
+                  {isGeneratingQuiz ? <Loader2 size={14} className="animate-spin" /> : <GraduationCap size={14} />}
+                  Generate Quiz
+                </button>
+                <button onClick={handleGenerateGuide} disabled={isGeneratingGuide || documents.length === 0} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-30">
                   {isGeneratingGuide ? <Loader2 size={14} className="animate-spin" /> : <BookOpen size={14} />}
-                  Synthesize Guide
+                  Generate Guide
                 </button>
               </div>
 
@@ -313,12 +399,15 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
                 <div className="h-full flex flex-col items-center justify-center text-center opacity-20 py-12">
                   <BookOpen size={48} className="mb-4" />
                   <p className="text-lg">Notebook guide not generated.</p>
+                  <button onClick={handleGenerateGuide} className="mt-4 px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-500 transition-all">
+                    Generate Guide
+                  </button>
                 </div>
               ) : (
                 <div className="max-w-3xl mx-auto space-y-8 md:space-y-12 pb-12">
                   <section>
                     <h3 className="text-xl md:text-2xl font-black text-white mb-4 flex items-center gap-2">
-                      <div className="w-1 h-6 bg-indigo-500 rounded-full" /> Summary
+                      <div className="w-1 h-6 bg-emerald-500 rounded-full" /> Summary
                     </h3>
                     <p className="text-sm md:text-lg text-gray-400 leading-relaxed font-light">{guide.summary}</p>
                   </section>
@@ -354,6 +443,100 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
                     </h3>
                     <div className="text-xs md:text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{guide.studyGuide}</div>
                   </section>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'quiz' && (
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar space-y-8 md:space-y-12">
+              {!quiz ? (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-20 py-12">
+                  <GraduationCap size={48} className="mb-4" />
+                  <p className="text-lg">Generate a quiz to test your knowledge.</p>
+                  <button onClick={handleGenerateQuiz} className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-500 transition-all">
+                    Generate New Quiz
+                  </button>
+                </div>
+              ) : showResults ? (
+                <div className="flex flex-col items-center justify-center space-y-8 animate-fadeIn">
+                  <div className="text-center space-y-4">
+                    <h3 className="text-3xl font-black text-white">Quiz Results</h3>
+                    <div className="text-6xl font-black text-indigo-500">{calculateScore()} / {quiz.length}</div>
+                    <p className="text-gray-400">You mastered this topic!</p>
+                  </div>
+                  <div className="w-full max-w-2xl space-y-4">
+                    {quiz.map((q, i) => (
+                      <div key={i} className={`p-4 rounded-xl border ${userAnswers[i] === q.correctAnswerIndex ? 'border-green-500/50 bg-green-900/10' : 'border-red-500/50 bg-red-900/10'}`}>
+                        <p className="font-bold text-white mb-2">{i + 1}. {q.question}</p>
+                        <p className={`text-sm ${userAnswers[i] === q.correctAnswerIndex ? 'text-green-400' : 'text-red-400'}`}>
+                          Your answer: {q.options[userAnswers[i]]}
+                        </p>
+                        {userAnswers[i] !== q.correctAnswerIndex && (
+                          <p className="text-sm text-green-400 mt-1">Correct answer: {q.options[q.correctAnswerIndex]}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2 italic">{q.explanation}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleGenerateQuiz} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-500 transition-all">
+                    Try Another Quiz
+                  </button>
+                </div>
+              ) : (
+                <div className="max-w-2xl mx-auto flex flex-col h-full justify-center">
+                  <div className="mb-8 flex justify-between items-center text-gray-400 text-sm font-bold uppercase tracking-widest">
+                    <span>Question {currentQuestion + 1} of {quiz.length}</span>
+                    <span>Knowledge Check</span>
+                  </div>
+                  <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8 shadow-2xl">
+                    <h3 className="text-xl md:text-2xl font-bold text-white mb-8 leading-relaxed">
+                      {quiz[currentQuestion].question}
+                    </h3>
+                    <div className="space-y-4">
+                      {quiz[currentQuestion].options.map((option, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleAnswer(idx)}
+                          className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-4 ${userAnswers[currentQuestion] === idx
+                            ? 'border-indigo-500 bg-indigo-900/20 text-white'
+                            : 'border-gray-800 bg-gray-900/50 text-gray-300 hover:bg-gray-800 hover:border-gray-700'
+                            }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border ${userAnswers[currentQuestion] === idx ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-700 text-gray-500'
+                            }`}>
+                            {String.fromCharCode(65 + idx)}
+                          </div>
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-8 flex justify-between">
+                    <button
+                      onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
+                      disabled={currentQuestion === 0}
+                      className="text-gray-500 hover:text-white disabled:opacity-30 font-bold px-4 py-2"
+                    >
+                      Previous
+                    </button>
+                    {currentQuestion < quiz.length - 1 ? (
+                      <button
+                        onClick={() => setCurrentQuestion(currentQuestion + 1)}
+                        className="bg-white text-black px-6 py-2 rounded-xl font-bold hover:bg-gray-200 transition-all"
+                      >
+                        Next
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setShowResults(true)}
+                        disabled={userAnswers.length < quiz.length}
+                        className="bg-emerald-500 text-white px-8 py-2 rounded-xl font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Submit Quiz
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

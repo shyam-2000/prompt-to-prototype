@@ -90,3 +90,10 @@ export interface PresentationOptions {
   date?: Date;
   location?: string;
 }
+
+export interface QuizItem {
+  question: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
