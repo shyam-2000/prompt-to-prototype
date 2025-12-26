@@ -211,7 +211,7 @@ export const generateEducationalVideo = async (prompt: string): Promise<string> 
     operation = await ai.operations.getVideosOperation({ operation: operation });
   }
   const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-  return `${downloadLink}&key=${process.env.API_KEY}`;
+  return `${downloadLink}&key=${process.env.GEMINI_API_KEY}`;
 };
 
 export const translateText = async (text: string, targetLanguage: string): Promise<string> => {
