@@ -257,11 +257,11 @@ export const processSpeechIntelligence = async (transcript: string, knowledgeBas
 
   const prompt = `Perform a Deep Research analysis on the following transcript: "${transcript}".
   
-  TASKS:
-  1. Translate the transcript into high-quality scholarly English.
-  2. Synthesize a "Deep Research" hybrid summary. Use both the provided Knowledge Base context and real-time information from the web to verify facts and expand on concepts.
-  3. The summary should be authoritative, detailed, and structured for research purposes.
-  4. Determine if external web grounding was used.
+  1. Transcribe the exact words spoken in the original language as "originalTranscript".
+  2. Translate the transcript into elegant, articulate, and high-quality English as "translation". Ensure the tone is sophisticated and flows naturally.
+  3. Create a detailed summary of ONLY the provided transcript as "summary". STRICTLY LIMIT the summary to the content of the transcript. Do NOT add external information or expand on concepts not present in the speech.
+  4. The summary should be authoritative and structured.
+  5. Determine if external web grounding was used as "ragUsed".
 
   KNOWLEDGE BASE CONTEXT:
   ${knowledgeBase.length > 0 ? knowledgeBase.join('\n---\n') : "No personal documents provided."}
@@ -276,11 +276,12 @@ export const processSpeechIntelligence = async (transcript: string, knowledgeBas
       responseSchema: {
         type: Type.OBJECT,
         properties: {
+          originalTranscript: { type: Type.STRING },
           translation: { type: Type.STRING },
           summary: { type: Type.STRING },
           ragUsed: { type: Type.BOOLEAN }
         },
-        required: ['translation', 'summary', 'ragUsed']
+        required: ['originalTranscript', 'translation', 'summary', 'ragUsed']
       },
       tools: useGoogleSearch ? [{ googleSearch: {} }] : undefined,
       thinkingConfig: { thinkingBudget: 16000 }
