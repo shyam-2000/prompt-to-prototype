@@ -3,9 +3,9 @@ import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { PresentationSlide, PresentationOptions, NotebookGuide } from "../types";
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY is not set in environment variables.");
+    throw new Error("GEMINI_API_KEY is not set in environment variables.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -23,9 +23,9 @@ const parseJSON = (text: string) => {
     const firstOpenBrace = text.indexOf('{');
     const lastCloseBrace = text.lastIndexOf('}');
     if (firstOpenBrace !== -1 && lastCloseBrace !== -1) {
-       try {
-         return JSON.parse(text.substring(firstOpenBrace, lastCloseBrace + 1));
-       } catch (inner) { }
+      try {
+        return JSON.parse(text.substring(firstOpenBrace, lastCloseBrace + 1));
+      } catch (inner) { }
     }
     throw e;
   }
@@ -35,8 +35,8 @@ const SLIDE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     title: { type: Type.STRING, description: 'The title of the slide.' },
-    bullets: { 
-      type: Type.ARRAY, 
+    bullets: {
+      type: Type.ARRAY,
       items: { type: Type.STRING },
       description: 'A list of 3-5 key points for the slide.'
     },
@@ -64,7 +64,7 @@ export const runMapsQuery = async (query: string, location?: { lat: number, lng:
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: query,
-    config: { 
+    config: {
       tools: [{ googleMaps: {} }],
       toolConfig: location ? {
         retrievalConfig: {
@@ -90,7 +90,7 @@ export const executePythonCode = async (code: string) => {
     
     CODE:
     ${code}`,
-    config: { 
+    config: {
       systemInstruction: "You are a Python execution environment and math tutor. Provide the exact output of the code provided."
     }
   });
@@ -105,7 +105,7 @@ export const generateNotebookGuide = async (docs: { title: string; content: stri
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt + "\n\nCONTEXT:\n" + context,
-    config: { 
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -166,7 +166,7 @@ export const chatWithNotebook = async (query: string, docs: { title: string; con
 export const generateAudioOverview = async (docs: { title: string; content: string }[]): Promise<string> => {
   const ai = getClient();
   const context = docs.map(d => `SOURCE: ${d.title}\nCONTENT: ${d.content}`).join('\n---\n');
-  
+
   const conversationPrompt = `Create a lively, deep-dive educational podcast conversation between Joe and Jane about these documents.
   Joe is energetic and asks great questions. Jane is an expert and explains things clearly.
   Focus on the most interesting insights from the sources.
@@ -254,7 +254,7 @@ export const processSpeechIntelligence = async (transcript: string, knowledgeBas
   const ai = getClient();
   const activePlugins = plugins || [];
   const useGoogleSearch = activePlugins.includes('google-search');
-  
+
   const prompt = `Perform a Deep Research analysis on the following transcript: "${transcript}".
   
   TASKS:
@@ -271,7 +271,7 @@ export const processSpeechIntelligence = async (transcript: string, knowledgeBas
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt,
-    config: { 
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -298,7 +298,7 @@ export const generatePresentation = async (topic: string, kb: string[], options:
     contents: `Create a presentation about ${topic}. Context/Location: ${options?.location || 'General'}. 
     Knowledge Base Context:
     ${context}`,
-    config: { 
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -318,7 +318,7 @@ export const expandPresentation = async (topic: string, slides: any[], kb: strin
     contents: `Expand the following presentation deck about ${topic}. Add 3 more unique slides. Current slides: ${JSON.stringify(slides)}. 
     Knowledge Base Context:
     ${context}`,
-    config: { 
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
