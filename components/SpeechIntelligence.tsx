@@ -110,7 +110,7 @@ const SpeechIntelligence: React.FC<Props> = ({ knowledgeBase, plugins, onExportT
   };
 
   return (
-    <div className="h-full flex flex-col space-y-6 p-6 animate-fadeIn overflow-hidden">
+    <div className="h-full flex flex-col space-y-4 md:space-y-6 p-4 md:p-6 animate-fadeIn overflow-y-auto lg:overflow-hidden">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-4xl font-black text-white flex items-center gap-3">
@@ -130,7 +130,7 @@ const SpeechIntelligence: React.FC<Props> = ({ knowledgeBase, plugins, onExportT
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
         {/* Left Column: Recording and Transcript */}
-        <div className="lg:col-span-4 flex flex-col space-y-6 min-h-0">
+        <div className="lg:col-span-4 flex flex-col space-y-6 min-h-[500px] lg:min-h-0">
           {/* Recording Box */}
           <div className="bg-gray-900/40 rounded-3xl border border-gray-800 p-8 flex flex-col items-center justify-center relative overflow-hidden flex-1 group shadow-2xl">
             {processingStep === 'recording' ? (
@@ -179,9 +179,9 @@ const SpeechIntelligence: React.FC<Props> = ({ knowledgeBase, plugins, onExportT
         </div>
 
         {/* Right Column: NotebookLM Style Results */}
-        <div className="lg:col-span-8 bg-gray-900/40 rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden">
+        <div className="lg:col-span-8 bg-gray-900/40 rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden min-h-[500px] lg:min-h-0">
           {/* Header Bar */}
-          <div className="flex flex-row items-center justify-between p-8 border-b border-gray-800 bg-gray-900/20">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 md:p-8 border-b border-gray-800 bg-gray-900/20">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-gray-950 border border-gray-800 rounded-2xl text-indigo-400">
                 <Database size={24} />

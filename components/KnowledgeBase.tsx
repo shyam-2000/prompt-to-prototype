@@ -250,7 +250,7 @@ const KnowledgeBase: React.FC<Props> = ({ documents, onAddDocument, onRemoveDocu
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-y-auto lg:overflow-hidden">
-        <div className="lg:col-span-3 flex flex-col gap-4 md:gap-6 overflow-visible lg:overflow-y-auto custom-scrollbar">
+        <div className={`lg:col-span-3 flex-col gap-4 md:gap-6 overflow-visible lg:overflow-y-auto custom-scrollbar ${activeTab !== 'sources' ? 'hidden lg:flex' : 'flex'}`}>
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 md:p-6 shadow-xl">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-between gap-2">
               <span className="flex items-center gap-2"><Plus size={14} /> New Source</span>
